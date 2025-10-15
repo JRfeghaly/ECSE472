@@ -1,0 +1,9 @@
+*name of circuit
+Vin n1 0 DC 6
+R1 n1 n2 100
+R2 n2 0 50
+C1 n2 0 1e-6
+Eamp n3 0 n2 0 2
+R3 n3 0 1e3
+I1 n2 0 0.02
+.end
