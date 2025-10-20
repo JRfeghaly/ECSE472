@@ -2,18 +2,24 @@ import numpy as np
 np.set_printoptions(precision=6, suppress=True)
 
 def get_lines(file_path):
-    with open(file_path, 'r') as file:
-        lines = file.readlines()
     netlist = []
-    for line in lines[1:-1]:  #Skip the first and last line
-        netlist.append(line.strip())
+    with open(file_path, 'r') as file:
+        for line in file:
+            line = line.strip()
+            #skip empty or comment lines
+            if not line or line.startswith('*') or line.startswith('.'):
+                continue
+            #stop at .end
+            if line.lower() == '.end':
+                break
+            netlist.append(line)
     return netlist
 
 def parse_components(lines):
     """
     Returns a list of component dicts.
     For E (VCVS): format  Ename n+ n- nc+ nc- gain
-    For V:         Vname n+ n- [DC|AC] value
+    For V: Vname n+ n- [DC|AC] value
     Others (R, I, C): name n1 n2 value
     """
     comps = []
@@ -35,11 +41,11 @@ def parse_components(lines):
             })
             continue
 
-        # Common 2-terminal forms
+        #common 2-nodes forms
         n1, n2 = tks[1], tks[2]
 
         if ctype == "V":
-            # Vname n+ n- [DC|AC] value
+            #Vname n+ n- [DC|AC] value
             if len(tks) >= 5 and tks[3].upper() in ("DC", "AC"):
                 value = float(tks[4])
             else:
@@ -55,25 +61,24 @@ def parse_components(lines):
 
 def build_node_map(components):
     nodes = set()
-    vsrc_names = []  # includes independent V and E (VCVS) because both add a source current variable
+    vsrc_names = []#includes independent V and E (VCVS) because both add a source current variable
 
     for c in components:
-        # primary terminals
         if c["n1"] != "0": nodes.add(c["n1"])
         if c["n2"] != "0": nodes.add(c["n2"])
 
-        # control nodes for VCVS
+        #control nodes for VCVS
         if c["type"] == "E":
             if c["ctrl_p"] != "0": nodes.add(c["ctrl_p"])
             if c["ctrl_n"] != "0": nodes.add(c["ctrl_n"])
-            vsrc_names.append(c["name"])  # E behaves like a voltage source in MNA
+            vsrc_names.append(c["name"])  #E behaves like a voltage source in MNA
         elif c["type"] == "V":
             vsrc_names.append(c["name"])
 
     nodes = sorted(nodes)
-    node_index = {node: i + 1 for i, node in enumerate(nodes)}  # 1-based for readability
-    N = len(nodes)
-    M = len(vsrc_names)
+    node_index = {node: i + 1 for i, node in enumerate(nodes)}  #starts at 1 for readability
+    N = len(nodes) #number of non-ground nodes (number of voltage variables)
+    M = len(vsrc_names) #number of voltage sources (number of current variables)
     return node_index, vsrc_names, N, M
     
 def get_index(node, node_map):
@@ -126,24 +131,24 @@ def stamp_components(components, node_map, voltage_sources, N, M):
                 C[n1, n2] -= cval
                 C[n2, n1] -= cval
         
-        elif t == "E":  # VCVS
+        elif t == "E":#VCVS
             k = voltage_sources.index(c["name"])
-            # main terminals behave like a V source (value enforced by extra equation)
+            #main terminals behave like a V source (value enforced by extra equation)
             if n1 is not None: B[n1, k] = 1.0
             if n2 is not None: B[n2, k] = -1.0
-            # control relationship: v(n1)-v(n2) - gain*(v(cp)-v(cn)) = 0
+            #control relationship: v(n1)-v(n2) - gain*(v(cp)-v(cn)) = 0
             cp = get_index(c["ctrl_p"], node_map)
             cn = get_index(c["ctrl_n"], node_map)
             gain = c["gain"]
-            # Row k of the bottom-left block gets additional coefficients on control nodes
+            #row k of the bottom-left block gets additional coefficients on control nodes
             if cp is not None: Ectrl[k, cp] += -gain
             if cn is not None: Ectrl[k, cn] += +gain
-            # e (bottom of RHS) stays 0 for VCVS
 
     return G, C, B, Ectrl, b
 
 def build_system(G, B, Ectrl, N, M):
-    # A = [[G, B], [B^T + Ectrl, 0]]
+    #A = [[G, B], line 1 
+    #[B^T + Ectrl, 0]] line 2
     top = np.hstack((G, B))
     bottom_left = B.T + Ectrl
     bottom = np.hstack((bottom_left, np.zeros((M, M))))
@@ -154,27 +159,27 @@ def main():
     file_path = "circuit.txt"
     lines = get_lines(file_path)
     comps = parse_components(lines)
-    node_index, vsrc_names, N, M = build_node_map(comps)
+    node_index, vsrc_names, N, M = build_node_map(comps) #identify all nodes and voltage sources
     G, C, B, Ectrl, b = stamp_components(comps, node_index, vsrc_names, N, M)
     A = build_system(G, B, Ectrl, N, M)
 
     try:
-        x = np.linalg.solve(A, b)
+        x = np.linalg.solve(A, b) #solve Ax = b for x
     except np.linalg.LinAlgError:
         print("Singular system: check for ungrounded nodes or conflicting sources.")
         return
 
-    #outputs G C b
+    #print G C b
     print("G matrix (conductance):\n", G)
     print("\nC matrix (capacitors):\n", C)
     print("\nb vector (sources):\n", b)
 
-    print("\n--- Node Voltages ---")
+    print("\nNode Voltages:")
     for name, one_based in node_index.items():
         print(f"{name}: {x[one_based - 1, 0]:.6f} V")
 
     if M:
-        print("\n--- Currents through Voltage/VCVS sources ---")
+        print("\nCurrents through Voltage/VCVS sources:")
         for k, sname in enumerate(vsrc_names):
             print(f"{sname}: {x[N + k, 0]:.6f} A")
 
