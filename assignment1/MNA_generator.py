@@ -41,7 +41,6 @@ def parse_components(lines):
             })
             continue
 
-        #common 2-nodes forms
         n1, n2 = tks[1], tks[2]
 
         if ctype == "V":
