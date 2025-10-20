@@ -86,7 +86,7 @@ def get_index(node, node_map):
 def stamp_components(components, node_map, voltage_sources, N, M):
     G = np.zeros((N, N))
     C = np.zeros((N, N))
-    B = np.zeros((N, M))
+    G2 = np.zeros((N, M))
     b = np.zeros((N + M, 1))
     Ectrl = np.zeros((M, N))
 
@@ -115,9 +115,9 @@ def stamp_components(components, node_map, voltage_sources, N, M):
         elif t == "V":
             k = voltage_sources.index(c['name'])
             if n1 is not None:
-                B[n1, k] = 1
+                G2[n1, k] = 1
             if n2 is not None:
-                B[n2, k] = -1
+                G2[n2, k] = -1
             b[N + k, 0] = val
 
         elif t == "C":
@@ -133,8 +133,8 @@ def stamp_components(components, node_map, voltage_sources, N, M):
         elif t == "E":#VCVS
             k = voltage_sources.index(c["name"])
             #main terminals behave like a V source (value enforced by extra equation)
-            if n1 is not None: B[n1, k] = 1.0
-            if n2 is not None: B[n2, k] = -1.0
+            if n1 is not None: G2[n1, k] = 1.0
+            if n2 is not None: G2[n2, k] = -1.0
             #control relationship: v(n1)-v(n2) - gain*(v(cp)-v(cn)) = 0
             cp = get_index(c["ctrl_p"], node_map)
             cn = get_index(c["ctrl_n"], node_map)
@@ -143,13 +143,13 @@ def stamp_components(components, node_map, voltage_sources, N, M):
             if cp is not None: Ectrl[k, cp] += -gain
             if cn is not None: Ectrl[k, cn] += +gain
 
-    return G, C, B, Ectrl, b
+    return G, C, G2, Ectrl, b
 
-def build_system(G, B, Ectrl, N, M):
-    #A = [[G, B], line 1 
-    #[B^T + Ectrl, 0]] line 2
-    top = np.hstack((G, B))
-    bottom_left = B.T + Ectrl
+def build_system(G, G2, Ectrl, N, M):
+    #A = [[G, G2], line 1 
+    #[G2^T + Ectrl, 0]] line 2
+    top = np.hstack((G, G2))
+    bottom_left = G2.T + Ectrl
     bottom = np.hstack((bottom_left, np.zeros((M, M))))
     A = np.vstack((top, bottom))
     return A
@@ -159,8 +159,8 @@ def main():
     lines = get_lines(file_path)
     comps = parse_components(lines)
     node_index, vsrc_names, N, M = build_node_map(comps) #identify all nodes and voltage sources
-    G, C, B, Ectrl, b = stamp_components(comps, node_index, vsrc_names, N, M)
-    A = build_system(G, B, Ectrl, N, M)
+    G, C, G2, Ectrl, b = stamp_components(comps, node_index, vsrc_names, N, M)
+    A = build_system(G, G2, Ectrl, N, M)
 
     try:
         x = np.linalg.solve(A, b) #solve Ax = b for x
