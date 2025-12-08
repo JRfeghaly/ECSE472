@@ -1,0 +1,10 @@
+* Harmonic balance test with added nodes n2 and n3
+
+* Main nonlinear node (n1)
+I1 n1 0 COS 0.01 1000
+D1 n1 n2 
+R1 n2 0 1000
+C1 n2 0 1e-6
+
+.tran 1ms 1us
+.end

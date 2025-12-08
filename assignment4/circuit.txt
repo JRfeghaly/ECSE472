@@ -1,0 +1,11 @@
+* a half-wave recitifier circuit
+Vin n1 0 COS 1 60
+* Vin is a cosine with a 1V amplitude and 60Hz frequency
+D1 n1 n2
+R1 n2 0 50
+C1 n2 0 1e-3
+R2 n2 n3 1e5
+R3 n3 0 1e5
+.tran 0.05s  0.1ms
+* run transient simulation for 0.05s with step size of 0.1ms 
+.end

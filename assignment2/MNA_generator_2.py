@@ -161,9 +161,9 @@ def build_system(G, G2, Ectrl, N, M):
     bottom = np.hstack((bottom_left, np.zeros((M, M))))
     A = np.vstack((top, bottom))
     return A
-
+#4, 3.3, 0.01
 def nonlinear_dc_analysis(components, node_map, vsrc_names, N, M, max_iter=100, tol=1e-6):
-    v = np.zeros((N + M, 1))  # initial guess
+    v = np.array([[4], [3.3], [0.01]])  # initial guess
     Is, Vt = 1e-14, 0.025   # diode parameters
 
     for iteration in range(max_iter):
